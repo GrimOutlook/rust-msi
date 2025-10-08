@@ -19,15 +19,20 @@ use uuid::Uuid;
 const FMTID: [u8; 16] =
     *b"\xe0\x85\x9f\xf2\xf9\x4f\x68\x10\xab\x91\x08\x00\x2b\x27\xb3\xd9";
 
+// TODO: Convert this to an enum maybe?
 const PROPERTY_TITLE: u32 = 2;
 const PROPERTY_SUBJECT: u32 = 3;
 const PROPERTY_AUTHOR: u32 = 4;
+const PROPERTY_KEYWORDS: u32 = 5;
 const PROPERTY_COMMENTS: u32 = 6;
 const PROPERTY_TEMPLATE: u32 = 7;
 const PROPERTY_UUID: u32 = 9;
 const PROPERTY_CREATION_TIME: u32 = 12;
+const PROPERTY_LAST_SAVE_TIME: u32 = 13;
+const PROPERTY_PAGE_COUNT: u32 = 14;
 const PROPERTY_WORD_COUNT: u32 = 15;
 const PROPERTY_CREATING_APP: u32 = 18;
+const PROPERTY_DOC_SECURITY: u32 = 19;
 
 // ========================================================================= //
 
@@ -37,6 +42,10 @@ pub struct SummaryInfo {
 }
 
 impl SummaryInfo {
+    pub fn properties_mut(&mut self) -> &mut PropertySet {
+        &mut self.properties
+    }
+
     /// Creates an empty `SummaryInfo` with no properties set.
     pub(crate) fn new() -> SummaryInfo {
         let properties = PropertySet::new(OperatingSystem::Win32, 10, FMTID);
@@ -45,7 +54,7 @@ impl SummaryInfo {
         summary
     }
 
-    pub(crate) fn read<R: Read + Seek>(reader: R) -> io::Result<SummaryInfo> {
+    pub fn read<R: Read + Seek>(reader: R) -> io::Result<SummaryInfo> {
         let properties = PropertySet::read(reader)?;
         if properties.format_identifier() != &FMTID {
             invalid_data!("Property set has wrong format identifier");
@@ -58,7 +67,7 @@ impl SummaryInfo {
     }
 
     /// Gets the architecture string from the "template" property, if one is
-    /// set.  This indicates the hardware architecture that this package is
+    /// set. This indicates the hardware architecture that this package is
     /// intended for (e.g. `"x64"`).
     #[must_use]
     pub fn arch(&self) -> Option<&str> {
@@ -66,11 +75,7 @@ impl SummaryInfo {
             Some(PropertyValue::LpStr(template)) => {
                 let arch =
                     template.split_once(';').map_or(&**template, |x| x.0);
-                if arch.is_empty() {
-                    None
-                } else {
-                    Some(arch)
-                }
+                if arch.is_empty() { None } else { Some(arch) }
             }
             _ => None,
         }
@@ -204,6 +209,39 @@ impl SummaryInfo {
         self.properties.remove(PROPERTY_CREATION_TIME);
     }
 
+    // TODO: Deduplicate the code for the FileTime properties as these all have the same functions
+    // just with different property names. Want to get this thing working first though.
+
+    /// Gets the "last save time" property, if one is set.  This indicates the
+    /// date/time when the package was last saved.
+    #[must_use]
+    pub fn last_saved_time(&self) -> Option<SystemTime> {
+        match self.properties.get(PROPERTY_LAST_SAVE_TIME) {
+            Some(&PropertyValue::FileTime(timestamp)) => {
+                Some(timestamp.to_system_time())
+            }
+            _ => None,
+        }
+    }
+
+    /// Sets the "last save time" property.
+    pub fn set_last_save_time(&mut self, timestamp: SystemTime) {
+        self.properties.set(
+            PROPERTY_LAST_SAVE_TIME,
+            PropertyValue::FileTime(Timestamp::from_system_time(timestamp)),
+        );
+    }
+
+    /// Sets the "last save time" property to the current time.
+    pub fn set_last_save_time_to_now(&mut self) {
+        self.set_last_save_time(SystemTime::now());
+    }
+
+    /// Clears the "last save time" property.
+    pub fn clear_last_save_time(&mut self) {
+        self.properties.remove(PROPERTY_LAST_SAVE_TIME);
+    }
+
     /// Gets the list of languages from the "template" property, if one is set.
     /// This indicates the languages that this package supports.
     pub fn languages(&self) -> Vec<Language> {
@@ -251,6 +289,30 @@ impl SummaryInfo {
         self.set_languages(&[]);
     }
 
+    /// Gets the list of keywords
+    pub fn keywords(&self) -> Vec<String> {
+        match self.properties.get(PROPERTY_KEYWORDS) {
+            Some(PropertyValue::LpStr(keywords)) => keywords
+                .split(';')
+                .map(str::trim_end)
+                .map(String::from)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Sets the list of keywords
+    pub fn set_keywords(&mut self, keywords: &[String]) {
+        self.properties
+            .set(PROPERTY_KEYWORDS, PropertyValue::LpStr(keywords.join("; ")));
+    }
+
+    /// Clears the list of keywords from the keyword property except for the required default
+    /// value.
+    pub fn clear_keywords(&mut self) {
+        self.set_keywords(&[]);
+    }
+
     /// Gets the "subject" property, if one is set.  This typically indicates
     /// the name of the application/software that will be installed by the
     /// package.
@@ -285,8 +347,7 @@ impl SummaryInfo {
 
     /// Sets the "title" property.
     pub fn set_title<S: Into<String>>(&mut self, title: S) {
-        self.properties
-            .set(PROPERTY_TITLE, PropertyValue::LpStr(title.into()));
+        self.properties.set(PROPERTY_TITLE, PropertyValue::LpStr(title.into()));
     }
 
     /// Clears the "title" property.
@@ -330,13 +391,51 @@ impl SummaryInfo {
 
     /// Sets the "Word Count" property.
     pub fn set_word_count(&mut self, word_count: i32) {
-        self.properties
-            .set(PROPERTY_WORD_COUNT, PropertyValue::I4(word_count));
+        self.properties.set(PROPERTY_WORD_COUNT, PropertyValue::I4(word_count));
     }
 
     /// Clears the "Word Count" property.
     pub fn clear_word_count(&mut self) {
         self.properties.remove(PROPERTY_WORD_COUNT);
+    }
+
+    /// Gets the "Page Count" property, if one is set.
+    #[must_use]
+    pub fn page_count(&self) -> Option<i32> {
+        match self.properties.get(PROPERTY_PAGE_COUNT) {
+            Some(PropertyValue::I4(page_count)) => Some(*page_count),
+            _ => None,
+        }
+    }
+
+    /// Sets the "Page Count" property.
+    pub fn set_page_count(&mut self, page_count: i32) {
+        self.properties.set(PROPERTY_PAGE_COUNT, PropertyValue::I4(page_count));
+    }
+
+    /// Clears the "Page Count" property.
+    pub fn clear_page_count(&mut self) {
+        self.properties.remove(PROPERTY_PAGE_COUNT);
+    }
+
+    /// Gets the "Security" property, if one is set.
+    #[must_use]
+    pub fn doc_security(&self) -> Option<i32> {
+        match self.properties.get(PROPERTY_DOC_SECURITY) {
+            Some(PropertyValue::I4(doc_security)) => Some(*doc_security),
+            _ => None,
+        }
+    }
+
+    /// Sets the "Security" property.
+    pub fn set_doc_security(&mut self, doc_security: i32) {
+        self.properties
+            .set(PROPERTY_DOC_SECURITY, PropertyValue::I4(doc_security));
+    }
+
+    /// Clears the "Word Count" property.
+    pub fn clear_doc_security(&mut self) {
+        self.properties.remove(PROPERTY_DOC_SECURITY);
     }
 }
 

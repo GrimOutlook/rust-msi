@@ -1,5 +1,3 @@
-use std::fmt;
-use std::io;
 use std::str;
 use uuid::Uuid;
 
@@ -10,7 +8,18 @@ use uuid::Uuid;
 /// This list of categories comes from the [column data
 /// types](https://docs.microsoft.com/en-us/windows/win32/msi/column-data-types)
 /// listed in the MSI docs.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    darling::FromMeta,
+    strum::EnumIter,
+    strum::EnumString,
+    strum::Display,
+)]
 pub enum Category {
     /// An unrestricted text string.
     ///
@@ -306,68 +315,6 @@ pub enum Category {
 }
 
 impl Category {
-    pub(crate) fn all() -> Vec<Category> {
-        vec![
-            Category::Text,
-            Category::UpperCase,
-            Category::LowerCase,
-            Category::Integer,
-            Category::DoubleInteger,
-            Category::TimeDate,
-            Category::Identifier,
-            Category::Property,
-            Category::Filename,
-            Category::WildCardFilename,
-            Category::Path,
-            Category::Paths,
-            Category::AnyPath,
-            Category::DefaultDir,
-            Category::RegPath,
-            Category::Formatted,
-            Category::FormattedSddlText,
-            Category::Template,
-            Category::Condition,
-            Category::Guid,
-            Category::Version,
-            Category::Language,
-            Category::Binary,
-            Category::CustomSource,
-            Category::Cabinet,
-            Category::Shortcut,
-        ]
-    }
-
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Category::AnyPath => "AnyPath",
-            Category::Binary => "Binary",
-            Category::Cabinet => "Cabinet",
-            Category::Condition => "Condition",
-            Category::CustomSource => "CustomSource",
-            Category::DefaultDir => "DefaultDir",
-            Category::DoubleInteger => "DoubleInteger",
-            Category::Filename => "Filename",
-            Category::Formatted => "Formatted",
-            Category::FormattedSddlText => "FormattedSDDLText",
-            Category::Guid => "GUID",
-            Category::Identifier => "Identifier",
-            Category::Integer => "Integer",
-            Category::Language => "Language",
-            Category::LowerCase => "LowerCase",
-            Category::Path => "Path",
-            Category::Paths => "Paths",
-            Category::Property => "Property",
-            Category::RegPath => "RegPath",
-            Category::Shortcut => "Shortcut",
-            Category::Template => "Template",
-            Category::Text => "Text",
-            Category::TimeDate => "TimeDate",
-            Category::UpperCase => "UpperCase",
-            Category::Version => "Version",
-            Category::WildCardFilename => "WildCardFilename",
-        }
-    }
-
     /// Returns true if the given string is valid to store in a database column
     /// with this category.
     #[must_use]
@@ -417,8 +364,7 @@ impl Category {
                 if let Some(substr) = string.strip_prefix('#') {
                     Category::Identifier.validate(substr)
                 } else {
-                    let mut parts: Vec<&str> =
-                        string.rsplitn(2, '.').collect();
+                    let mut parts: Vec<&str> = string.rsplitn(2, '.').collect();
                     parts.reverse();
                     !parts.is_empty()
                         && !parts[0].is_empty()
@@ -432,59 +378,17 @@ impl Category {
     }
 }
 
-impl fmt::Display for Category {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.as_str().fmt(formatter)
-    }
-}
-
-impl str::FromStr for Category {
-    type Err = io::Error;
-
-    fn from_str(string: &str) -> io::Result<Category> {
-        match string {
-            "AnyPath" => Ok(Category::AnyPath),
-            "Binary" => Ok(Category::Binary),
-            "Cabinet" => Ok(Category::Cabinet),
-            "Condition" => Ok(Category::Condition),
-            "CustomSource" => Ok(Category::CustomSource),
-            "DefaultDir" => Ok(Category::DefaultDir),
-            "DoubleInteger" => Ok(Category::DoubleInteger),
-            "Filename" => Ok(Category::Filename),
-            "Formatted" => Ok(Category::Formatted),
-            "FormattedSDDLText" => Ok(Category::FormattedSddlText),
-            "FormattedSddlText" => Ok(Category::FormattedSddlText),
-            "GUID" => Ok(Category::Guid),
-            "Guid" => Ok(Category::Guid),
-            "Identifier" => Ok(Category::Identifier),
-            "Integer" => Ok(Category::Integer),
-            "Language" => Ok(Category::Language),
-            "LowerCase" => Ok(Category::LowerCase),
-            "Path" => Ok(Category::Path),
-            "Paths" => Ok(Category::Paths),
-            "Property" => Ok(Category::Property),
-            "RegPath" => Ok(Category::RegPath),
-            "Shortcut" => Ok(Category::Shortcut),
-            "Template" => Ok(Category::Template),
-            "Text" => Ok(Category::Text),
-            "TimeDate" => Ok(Category::TimeDate),
-            "UpperCase" => Ok(Category::UpperCase),
-            "Version" => Ok(Category::Version),
-            "WildCardFilename" => Ok(Category::WildCardFilename),
-            _ => invalid_data!("Invalid category: {:?}", string),
-        }
-    }
-}
-
 // ========================================================================= //
 
 #[cfg(test)]
 mod tests {
+    use strum::IntoEnumIterator;
+
     use super::Category;
 
     #[test]
     fn category_string_round_trip() {
-        for category in Category::all() {
+        for category in Category::iter() {
             assert_eq!(
                 category.to_string().parse::<Category>().unwrap(),
                 category

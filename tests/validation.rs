@@ -1,8 +1,8 @@
 #[macro_use]
 mod testutil;
 
-use msi::{Category, Column, Insert, Package, PackageType, Value};
 use std::io::{Cursor, ErrorKind};
+use msi::{Category, Column, Insert, Package, PackageType, Value};
 
 // ========================================================================= //
 

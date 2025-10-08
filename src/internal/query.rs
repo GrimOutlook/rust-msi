@@ -389,10 +389,7 @@ impl Join {
                             .iter()
                             .cloned()
                             .chain(
-                                table2
-                                    .columns()
-                                    .iter()
-                                    .map(|_| ValueRef::Null),
+                                table2.columns().iter().map(|_| ValueRef::Null),
                             )
                             .collect();
                         rows.push(value_refs);
@@ -407,8 +404,8 @@ impl Join {
 impl fmt::Display for Join {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            Join::Table(ref table_name) => table_name.fmt(formatter),
-            Join::Inner(ref lhs, ref rhs, ref on) => {
+            Join::Table(table_name) => table_name.fmt(formatter),
+            Join::Inner(lhs, rhs, on) => {
                 lhs.format_for_join(formatter)?;
                 formatter.write_str(" INNER JOIN ")?;
                 rhs.format_for_join(formatter)?;
@@ -416,7 +413,7 @@ impl fmt::Display for Join {
                 on.fmt(formatter)?;
                 Ok(())
             }
-            Join::Left(ref lhs, ref rhs, ref on) => {
+            Join::Left(lhs, rhs, on) => {
                 lhs.format_for_join(formatter)?;
                 formatter.write_str(" LEFT JOIN ")?;
                 rhs.format_for_join(formatter)?;
@@ -769,8 +766,8 @@ mod tests {
         let query = Delete::from("Foobar");
         assert_eq!(format!("{query}"), "DELETE FROM Foobar".to_string());
 
-        let query = Delete::from("Foobar")
-            .with(Expr::col("Foo").lt(Expr::integer(17)));
+        let query =
+            Delete::from("Foobar").with(Expr::col("Foo").lt(Expr::integer(17)));
         assert_eq!(
             format!("{query}"),
             "DELETE FROM Foobar WHERE Foo < 17".to_string()

@@ -118,7 +118,7 @@ impl PropertyValue {
                 writer.write_u32::<LittleEndian>(3)?;
                 writer.write_i32::<LittleEndian>(*value)?;
             }
-            PropertyValue::LpStr(ref string) => {
+            PropertyValue::LpStr(string) => {
                 writer.write_u32::<LittleEndian>(30)?;
                 let bytes = codepage.encode(string.as_str());
                 let length = (bytes.len() + 1) as u32;
@@ -147,7 +147,7 @@ impl PropertyValue {
             PropertyValue::I1(_) => 8,
             PropertyValue::I2(_) => 8,
             PropertyValue::I4(_) => 8,
-            PropertyValue::LpStr(ref string) => {
+            PropertyValue::LpStr(string) => {
                 ((12 + string.len() as u32) >> 2) << 2
             }
             PropertyValue::FileTime(_) => 12,
@@ -261,13 +261,13 @@ impl PropertySet {
         let codepage = if let Some(&offset) =
             property_offsets.get(&PROPERTY_CODEPAGE)
         {
-            reader.seek(SeekFrom::Start(
-                section_offset as u64 + offset as u64,
-            ))?;
+            reader
+                .seek(SeekFrom::Start(section_offset as u64 + offset as u64))?;
             let value =
                 PropertyValue::read(reader.by_ref(), CodePage::default())?;
             if let PropertyValue::I2(codepage_id) = value {
                 let codepage_id = codepage_id as u16;
+
                 if let Some(codepage) = CodePage::from_id(codepage_id as i32) {
                     codepage
                 } else {
@@ -287,9 +287,8 @@ impl PropertySet {
         };
         let mut property_values = BTreeMap::<u32, PropertyValue>::new();
         for (name, offset) in property_offsets {
-            reader.seek(SeekFrom::Start(
-                section_offset as u64 + offset as u64,
-            ))?;
+            reader
+                .seek(SeekFrom::Start(section_offset as u64 + offset as u64))?;
             let value = PropertyValue::read(reader.by_ref(), codepage)?;
             if value.minimum_version() > format_version {
                 invalid_data!(
@@ -422,8 +421,7 @@ mod tests {
             PropertyValue::I4(123456789)
         );
 
-        let input: &[u8] =
-            b"\x1e\x00\x00\x00\x0e\x00\x00\x00Hello, world!\x00";
+        let input: &[u8] = b"\x1e\x00\x00\x00\x0e\x00\x00\x00Hello, world!\x00";
         assert_eq!(
             PropertyValue::read(input, CodePage::Utf8).unwrap(),
             PropertyValue::LpStr("Hello, world!".to_string())

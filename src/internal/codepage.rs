@@ -12,6 +12,7 @@ use encoding_rs::{EncoderResult, Encoding};
 /// list of valid code pages.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum CodePage {
+    CurrentCodePage,
     /// [Windows-932 (Japanese Shift JIS)](https://en.wikipedia.org/wiki/Code_page_932_(Microsoft_Windows))
     Windows932,
     /// [Windows-936 (Chinese (simplified) GBK)](https://en.wikipedia.org/wiki/Code_page_936_(Microsoft_Windows))
@@ -73,7 +74,7 @@ impl CodePage {
     #[must_use]
     pub fn from_id(id: i32) -> Option<CodePage> {
         match id {
-            0 => Some(CodePage::default()),
+            0 => Some(CodePage::CurrentCodePage),
             932 => Some(CodePage::Windows932),
             936 => Some(CodePage::Windows936),
             949 => Some(CodePage::Windows949),
@@ -108,6 +109,7 @@ impl CodePage {
     #[must_use]
     pub fn id(&self) -> i32 {
         match *self {
+            CodePage::CurrentCodePage => 0,
             CodePage::Windows932 => 932,
             CodePage::Windows936 => 936,
             CodePage::Windows949 => 949,
@@ -141,6 +143,7 @@ impl CodePage {
     #[must_use]
     pub fn name(&self) -> &str {
         match *self {
+            CodePage::CurrentCodePage => "Current CodePage",
             CodePage::Windows932 => "Windows Japanese Shift JIS",
             CodePage::Windows936 => "Windows Chinese (simplified) GBK",
             CodePage::Windows949 => "Windows Korean Unified Hangul Code",
@@ -222,6 +225,7 @@ impl CodePage {
 
     fn encoding(self) -> &'static Encoding {
         match self {
+            CodePage::CurrentCodePage => encoding_rs::WINDOWS_1252,
             CodePage::Windows932 => encoding_rs::EUC_JP,
             CodePage::Windows936 => encoding_rs::BIG5,
             CodePage::Windows949 => encoding_rs::EUC_KR,
@@ -333,10 +337,7 @@ mod tests {
 
     #[test]
     fn decoding_error() {
-        assert_eq!(
-            &CodePage::Utf8.decode(b"Qu\xee pasa?"),
-            "Qu\u{fffd} pasa?"
-        );
+        assert_eq!(&CodePage::Utf8.decode(b"Qu\xee pasa?"), "Qu\u{fffd} pasa?");
     }
 
     #[test]

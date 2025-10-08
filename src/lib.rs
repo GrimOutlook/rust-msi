@@ -14,7 +14,7 @@ extern crate cfb;
 extern crate encoding_rs;
 extern crate uuid;
 
-mod internal;
+pub mod internal;
 
 pub use crate::internal::category::Category;
 pub use crate::internal::codepage::CodePage;
