@@ -26,7 +26,7 @@ pub use crate::internal::query::{Delete, Insert, Select, Update};
 pub use crate::internal::stream::{StreamReader, StreamWriter, Streams};
 pub use crate::internal::summary::SummaryInfo;
 pub use crate::internal::table::{Row, Rows, Table};
-pub use crate::internal::value::Value;
+pub use crate::internal::value::{ToValue, Value};
 use std::fs;
 use std::io;
 use std::path::Path;

@@ -6,6 +6,12 @@ use uuid::Uuid;
 
 // ========================================================================= //
 
+pub trait ToValue {
+    fn to_value(&self) -> Value;
+}
+
+// ========================================================================= //
+
 /// A value from one cell in a database table row.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Value {

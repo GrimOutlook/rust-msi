@@ -364,7 +364,8 @@ impl Category {
                 if let Some(substr) = string.strip_prefix('#') {
                     Category::Identifier.validate(substr)
                 } else {
-                    let mut parts: Vec<&str> = string.rsplitn(2, '.').collect();
+                    let mut parts: Vec<&str> =
+                        string.rsplitn(2, '.').collect();
                     parts.reverse();
                     !parts.is_empty()
                         && !parts[0].is_empty()
@@ -375,6 +376,13 @@ impl Category {
             // TODO: Validate other categories.
             _ => true,
         }
+    }
+}
+
+impl quote::ToTokens for Category {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let category_str = self.to_string();
+        tokens.extend(quote::quote! {msi::Category::#category_str});
     }
 }
 
