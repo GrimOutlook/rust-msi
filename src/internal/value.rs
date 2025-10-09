@@ -10,6 +10,45 @@ pub trait ToValue {
     fn to_value(&self) -> Value;
 }
 
+impl<T: ToValue> ToValue for Option<T> {
+    fn to_value(&self) -> Value {
+        match self {
+            Some(value) => value.to_value(),
+            None => Value::Null,
+        }
+    }
+}
+
+impl ToValue for u8 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for u16 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for i16 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for i32 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self)
+    }
+}
+
+impl ToValue for String {
+    fn to_value(&self) -> Value {
+        Value::Str(self.clone())
+    }
+}
+
 // ========================================================================= //
 
 /// A value from one cell in a database table row.
