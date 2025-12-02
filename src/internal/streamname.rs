@@ -2,6 +2,11 @@ use std::char;
 
 // ========================================================================= //
 
+/// Prefix for streams that store meta information about the MSI.
+pub const META_PREFIX: char = '\u{5}';
+/// Prefix for streams the store table information
+pub const TABLE_PREFIX: char = '\u{4840}';
+
 pub const DIGITAL_SIGNATURE_STREAM_NAME: &str = "\u{5}DigitalSignature";
 pub const MSI_DIGITAL_SIGNATURE_EX_STREAM_NAME: &str =
     "\u{5}MsiDigitalSignatureEx";
@@ -9,20 +14,18 @@ pub const SUMMARY_INFO_STREAM_NAME: &str = "\u{5}SummaryInformation";
 pub const DOCUMENT_SUMMARY_INFO_STREAM_NAME: &str =
     "\u{5}DocumentSummaryInformation";
 
-const TABLE_PREFIX: char = '\u{4840}';
-
 // ========================================================================= //
 
 /// Decodes a stream name, and returns the decoded name and whether the stream
 /// was a table.
 pub fn decode(name: &str) -> (String, bool) {
     let mut output = String::new();
-    let mut is_table = false;
     let mut chars = name.chars().peekable();
-    if chars.peek() == Some(&TABLE_PREFIX) {
-        is_table = true;
-        chars.next();
-    }
+    let is_table = chars
+        .peek()
+        .is_some_and(|t| t == &TABLE_PREFIX)
+        .then(|| chars.next())
+        .is_some();
     for chr in chars {
         let value = chr as u32;
         if (0x3800..0x4800).contains(&value) {
@@ -35,6 +38,11 @@ pub fn decode(name: &str) -> (String, bool) {
             output.push(chr);
         }
     }
+    // Replace any non-ascii characters with underscores
+    output = output
+        .chars()
+        .map(|t| if t.is_ascii_alphanumeric() { t } else { '_' })
+        .collect();
     (output, is_table)
 }
 

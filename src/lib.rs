@@ -24,6 +24,9 @@ pub use crate::internal::language::Language;
 pub use crate::internal::package::{Package, PackageType, Tables};
 pub use crate::internal::query::{Delete, Insert, Select, Update};
 pub use crate::internal::stream::{StreamReader, StreamWriter, Streams};
+pub use crate::internal::streamname::{
+    decode as decode_streamname, encode as encode_streamname,
+};
 pub use crate::internal::summary::SummaryInfo;
 pub use crate::internal::table::{Row, Rows, Table};
 pub use crate::internal::value::Value;

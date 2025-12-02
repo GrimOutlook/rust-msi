@@ -30,6 +30,7 @@ uuid = "1"
 
 [dev-dependencies]
 clap = "2.27"
+itertools = "0.14.0"
 pest = "2.1"
 pest_derive = "2.1"
 time = "0.3"
