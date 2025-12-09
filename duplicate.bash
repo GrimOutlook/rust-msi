@@ -57,6 +57,7 @@ if test "$WIXL_TABLES" == "$DUPLICATE_TABLES"; then
 else
   fail "List of tables is different"
   difft <(echo "$WIXL_TABLES") <(echo "$DUPLICATE_TABLES")
+  fatal "Cannot continue if tables list is different"
 fi
 
 # Check that the list of streams is the same

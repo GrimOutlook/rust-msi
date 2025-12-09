@@ -12,6 +12,7 @@ use crate::internal::stringpool::{StringPool, StringPoolBuilder};
 use crate::internal::summary::SummaryInfo;
 use crate::internal::table::{Rows, Table};
 use crate::internal::value::{Value, ValueRef};
+use anyhow::Context;
 use cfb;
 use itertools::Itertools;
 use std::borrow::Borrow;
@@ -580,7 +581,7 @@ impl<F: Read + Write + Seek> Package<F> {
         &mut self,
         table_name: S,
         columns: Vec<Column>,
-    ) -> io::Result<()> {
+    ) -> anyhow::Result<()> {
         self.create_table_with_name(table_name.into(), columns)
     }
 
@@ -588,44 +589,48 @@ impl<F: Read + Write + Seek> Package<F> {
         &mut self,
         table_name: String,
         columns: Vec<Column>,
-    ) -> io::Result<()> {
-        if !Table::is_valid_name(&table_name) {
-            invalid_input!("{:?} is not a valid table name", table_name);
-        }
-        if columns.is_empty() {
-            invalid_input!("Cannot create a table with no columns");
-        }
-        if columns.len() > MAX_NUM_TABLE_COLUMNS {
-            invalid_input!(
-                "Cannot create a table with more than {} columns",
-                MAX_NUM_TABLE_COLUMNS
-            );
-        }
-        if !columns.iter().any(Column::is_primary_key) {
-            invalid_input!(
-                "Cannot create a table without at least one primary key column"
-            );
-        }
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            Table::is_valid_name(&table_name),
+            "{:?} is not a valid table name",
+            table_name
+        );
+        anyhow::ensure!(
+            !columns.is_empty(),
+            "Cannot create a table with no columns"
+        );
+        anyhow::ensure!(
+            columns.len() <= MAX_NUM_TABLE_COLUMNS,
+            "Cannot create a table with more than {} columns",
+            MAX_NUM_TABLE_COLUMNS
+        );
+        anyhow::ensure!(
+            columns.iter().any(Column::is_primary_key),
+            "Cannot create a table without at least one primary key column"
+        );
         {
             let mut column_names = HashSet::<&str>::new();
             for column in &columns {
                 let name = column.name();
-                if !Column::is_valid_name(name) {
-                    invalid_input!("{:?} is not a valid column name", name);
-                }
-                if column_names.contains(name) {
-                    invalid_input!(
-                        "Cannot create a table with multiple columns with the \
+                anyhow::ensure!(
+                    Column::is_valid_name(name),
+                    "{:?} is not a valid column name",
+                    name
+                );
+                anyhow::ensure!(
+                    !column_names.contains(name),
+                    "Cannot create a table with multiple columns with the \
                          same name ({:?})",
-                        name
-                    );
-                }
+                    name
+                );
                 column_names.insert(name);
             }
         }
-        if self.tables.contains_key(&table_name) {
-            already_exists!("Table {:?} already exists", table_name);
-        }
+        anyhow::ensure!(
+            !self.tables.contains_key(&table_name),
+            "Table {:?} already exists",
+            table_name
+        );
         self.insert_rows(
             Insert::into(COLUMNS_TABLE_NAME).rows(
                 columns
@@ -744,7 +749,7 @@ impl<F: Read + Write + Seek> Package<F> {
     /// Attempts to execute an insert query.  Returns an error without
     /// modifying the database if the query fails (e.g. due to values being
     /// invalid, or keys not being unique, or the table not existing).
-    pub fn insert_rows(&mut self, query: Insert) -> io::Result<()> {
+    pub fn insert_rows(&mut self, query: Insert) -> anyhow::Result<()> {
         self.set_finisher();
         query.exec(
             self.comp.as_mut().unwrap(),

@@ -1,7 +1,9 @@
 use crate::internal::expr::Expr;
+use crate::internal::streamname;
 use crate::internal::stringpool::StringPool;
 use crate::internal::table::{Row, Rows, Table};
 use crate::internal::value::{Value, ValueRef};
+use anyhow::bail;
 use cfb;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -144,33 +146,34 @@ impl Insert {
         comp: &mut cfb::CompoundFile<F>,
         string_pool: &mut StringPool,
         tables: &BTreeMap<String, Rc<Table>>,
-    ) -> io::Result<()>
+    ) -> anyhow::Result<()>
     where
         F: Read + Write + Seek,
     {
         let table = match tables.get(&self.table_name) {
             Some(table) => table,
-            None => not_found!("Table {:?} does not exist", self.table_name),
+            //TODO: Add an actual thiserror type.
+            None => bail!("Table {:?} does not exist", self.table_name),
         };
         // Validate the new rows.
         for values in &self.new_rows {
-            if values.len() != table.columns().len() {
-                invalid_input!(
-                    "Table {:?} has {} columns, but a row with {} values was \
+            anyhow::ensure!(
+                values.len() == table.columns().len(),
+                //TODO: Add an actual thiserror type.
+                "Table {:?} has {} columns, but a row with {} values was \
                      provided",
-                    self.table_name,
-                    table.columns().len(),
-                    values.len()
-                );
-            }
+                self.table_name,
+                table.columns().len(),
+                values.len()
+            );
             for (column, value) in table.columns().iter().zip(values.iter()) {
-                if !column.is_valid_value(value) {
-                    invalid_input!(
-                        "{} is not a valid value for column {:?}",
-                        value,
-                        column.name()
-                    );
-                }
+                anyhow::ensure!(
+                    column.is_valid_value(value),
+                    //TODO: Add an actual thiserror type.
+                    "{} is not a valid value for column {:?}",
+                    value,
+                    column.name()
+                );
                 // TODO: Validate foreign keys.
             }
         }
@@ -185,14 +188,13 @@ impl Insert {
                     .iter()
                     .map(|&index| row[index].to_value(string_pool))
                     .collect();
-                if rows_map.contains_key(&keys) {
-                    invalid_data!(
-                        "Malformed table {:?} contains multiple rows with \
-                         key {:?}",
-                        self.table_name,
-                        keys
-                    );
-                }
+                anyhow::ensure!(
+                    !rows_map.contains_key(&keys),
+                    //TODO: Add an actual thiserror type.
+                    "Malformed table {:?} contains multiple rows with key {:?}",
+                    self.table_name,
+                    keys
+                );
                 rows_map.insert(keys, row);
             }
         }
@@ -204,19 +206,19 @@ impl Insert {
                 .iter()
                 .map(|&index| values[index].clone())
                 .collect();
-            if rows_map.contains_key(&keys) {
-                already_exists!(
-                    "Table {:?} already contains a row with key {:?}",
-                    self.table_name,
-                    keys
-                );
-            }
-            if new_keys_set.contains(&keys) {
-                invalid_input!(
-                    "Cannot insert multiple rows with key {:?}",
-                    keys
-                );
-            }
+            anyhow::ensure!(
+                !rows_map.contains_key(&keys),
+                //TODO: Add an actual thiserror type.
+                "Table {:?} already contains a row with key {:?}",
+                self.table_name,
+                keys
+            );
+            anyhow::ensure!(
+                !new_keys_set.contains(&keys),
+                //TODO: Add an actual thiserror type.
+                "Cannot insert multiple rows with key {:?}",
+                keys
+            );
             new_keys_set.insert(keys);
         }
         // Insert the new rows into the table.
@@ -389,7 +391,10 @@ impl Join {
                             .iter()
                             .cloned()
                             .chain(
-                                table2.columns().iter().map(|_| ValueRef::Null),
+                                table2
+                                    .columns()
+                                    .iter()
+                                    .map(|_| ValueRef::Null),
                             )
                             .collect();
                         rows.push(value_refs);
@@ -766,8 +771,8 @@ mod tests {
         let query = Delete::from("Foobar");
         assert_eq!(format!("{query}"), "DELETE FROM Foobar".to_string());
 
-        let query =
-            Delete::from("Foobar").with(Expr::col("Foo").lt(Expr::integer(17)));
+        let query = Delete::from("Foobar")
+            .with(Expr::col("Foo").lt(Expr::integer(17)));
         assert_eq!(
             format!("{query}"),
             "DELETE FROM Foobar WHERE Foo < 17".to_string()
