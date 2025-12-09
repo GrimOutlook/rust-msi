@@ -13,10 +13,12 @@ use crate::internal::summary::SummaryInfo;
 use crate::internal::table::{Rows, Table};
 use crate::internal::value::{Value, ValueRef};
 use cfb;
+use itertools::Itertools;
 use std::borrow::Borrow;
-use std::collections::{btree_map, BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, btree_map};
 use std::io::{self, Read, Seek, Write};
 use std::rc::Rc;
+use strum::IntoEnumIterator;
 use uuid::Uuid;
 
 // ========================================================================= //
@@ -60,8 +62,7 @@ fn make_tables_table(long_string_refs: bool) -> Rc<Table> {
 fn make_validation_columns() -> Vec<Column> {
     let min = -0x7fff_ffff;
     let max = 0x7fff_ffff;
-    let values: Vec<&str> =
-        Category::all().into_iter().map(Category::as_str).collect();
+    let values: Vec<String> = Category::iter().map(|s| s.to_string()).collect();
     vec![
         Column::build("Table").primary_key().id_string(32),
         Column::build("Column").primary_key().id_string(32),
@@ -70,7 +71,12 @@ fn make_validation_columns() -> Vec<Column> {
         Column::build("MaxValue").nullable().range(min, max).int32(),
         Column::build("KeyTable").nullable().id_string(255),
         Column::build("KeyColumn").nullable().range(1, 32).int16(),
-        Column::build("Category").nullable().enum_values(&values).string(32),
+        Column::build("Category")
+            .nullable()
+            .enum_values(
+                values.iter().map(|s| s.as_str()).collect_vec().as_slice(),
+            )
+            .string(32),
         Column::build("Set").nullable().text_string(255),
         Column::build("Description").nullable().text_string(255),
     ]
@@ -105,7 +111,7 @@ pub enum PackageType {
 }
 
 impl PackageType {
-    fn from_clsid(clsid: &Uuid) -> Option<PackageType> {
+    pub fn from_clsid(clsid: &Uuid) -> Option<PackageType> {
         if *clsid == PackageType::Installer.clsid() {
             Some(PackageType::Installer)
         } else if *clsid == PackageType::Patch.clsid() {
@@ -122,9 +128,7 @@ impl PackageType {
             PackageType::Installer => {
                 Uuid::parse_str(INSTALLER_PACKAGE_CLSID).unwrap()
             }
-            PackageType::Patch => {
-                Uuid::parse_str(PATCH_PACKAGE_CLSID).unwrap()
-            }
+            PackageType::Patch => Uuid::parse_str(PATCH_PACKAGE_CLSID).unwrap(),
             PackageType::Transform => {
                 Uuid::parse_str(TRANSFORM_PACKAGE_CLSID).unwrap()
             }
@@ -278,7 +282,7 @@ impl<F: Read + Seek> Package<F> {
     /// underlying reader also supports the `Write` trait, then the `Package`
     /// object will be writable as well.
     pub fn open(inner: F) -> io::Result<Package<F>> {
-        let mut comp = cfb::CompoundFile::open(inner)?;
+        let mut comp = cfb::CompoundFile::open_strict(inner)?;
         let package_type = {
             let root_entry = comp.root_entry();
             let clsid = root_entry.clsid();
@@ -462,11 +466,8 @@ impl<F: Read + Seek> Package<F> {
                 }
                 columns.push(builder.with_bitfield(bitfield)?);
             }
-            let table = Table::new(
-                table_name,
-                columns,
-                string_pool.long_string_refs(),
-            );
+            let table =
+                Table::new(table_name, columns, string_pool.long_string_refs());
             all_tables.insert(table.name().to_string(), table);
         }
         Ok(Package {
@@ -484,11 +485,7 @@ impl<F: Read + Seek> Package<F> {
     /// fails (e.g. due to the column names being incorrect or the table(s) not
     /// existing).
     pub fn select_rows(&mut self, query: Select) -> io::Result<Rows<'_>> {
-        query.exec(
-            self.comp.as_mut().unwrap(),
-            &self.string_pool,
-            &self.tables,
-        )
+        query.exec(self.comp.as_mut().unwrap(), &self.string_pool, &self.tables)
     }
 
     /// Opens an existing binary stream in the package for reading.
@@ -516,7 +513,8 @@ impl<F: Read + Write + Seek> Package<F> {
         package_type: PackageType,
         inner: F,
     ) -> io::Result<Package<F>> {
-        let mut comp = cfb::CompoundFile::create(inner)?;
+        let mut comp =
+            cfb::CompoundFile::create_with_version(cfb::Version::V3, inner)?;
         comp.set_storage_clsid("/", package_type.clsid())?;
         let mut summary_info = SummaryInfo::new();
         summary_info.set_title(package_type.default_title().to_string());
@@ -935,10 +933,7 @@ mod tests {
         assert_eq!(rows.len(), 3);
         let values: Vec<(i32, String)> = rows
             .map(|row| {
-                (
-                    row[0].as_int().unwrap(),
-                    row[1].as_str().unwrap().to_string(),
-                )
+                (row[0].as_int().unwrap(), row[1].as_str().unwrap().to_string())
             })
             .collect();
         assert_eq!(

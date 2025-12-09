@@ -21,7 +21,7 @@ impl Table {
     /// Creates a new table object with the given name and columns.  The
     /// `long_string_refs` argument indicates the size of any encoded string
     /// refs.
-    pub(crate) fn new(
+    pub fn new(
         name: String,
         columns: Vec<Column>,
         long_string_refs: bool,
@@ -36,7 +36,7 @@ impl Table {
     }
 
     /// Returns the name of the CFB stream that holds this table's data.
-    pub(crate) fn stream_name(&self) -> String {
+    pub fn stream_name(&self) -> String {
         streamname::encode(&self.name, true)
     }
 
@@ -77,11 +77,7 @@ impl Table {
             .iter()
             .enumerate()
             .filter_map(|(index, column)| {
-                if column.is_primary_key() {
-                    Some(index)
-                } else {
-                    None
-                }
+                if column.is_primary_key() { Some(index) } else { None }
             })
             .collect()
     }
@@ -100,7 +96,7 @@ impl Table {
 
     /// Parses row data from the given data source and returns an interator
     /// over the rows.
-    pub(crate) fn read_rows<R: Read + Seek>(
+    pub fn read_rows<R: Read + Seek>(
         &self,
         mut reader: R,
     ) -> io::Result<Vec<Vec<ValueRef>>> {
@@ -117,10 +113,7 @@ impl Table {
         // The number of rows cannot exceed 65536, according to this FAQ:
         // http://www.installsite.org/pages/en/msifaq/a/1043.htm
         if num_rows > 65536 {
-            invalid_data!(
-                "Number of rows is too large ({} > 65536)",
-                num_rows
-            );
+            invalid_data!("Number of rows is too large ({} > 65536)", num_rows);
         }
         let mut rows =
             vec![Vec::<ValueRef>::with_capacity(num_columns); num_rows];
@@ -253,7 +246,7 @@ pub struct Rows<'a> {
 }
 
 impl<'a> Rows<'a> {
-    pub(crate) fn new(
+    pub fn new(
         string_pool: &'a StringPool,
         table: Rc<Table>,
         rows: Vec<Vec<ValueRef>>,

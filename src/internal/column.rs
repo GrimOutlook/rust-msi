@@ -297,11 +297,7 @@ impl Column {
     /// Returns the list of valid enum values for this column, if any.
     #[must_use]
     pub fn enum_values(&self) -> Option<&[String]> {
-        if self.enum_values.is_empty() {
-            None
-        } else {
-            Some(&self.enum_values)
-        }
+        if self.enum_values.is_empty() { None } else { Some(&self.enum_values) }
     }
 
     /// Returns true if the given value is valid for this column.
@@ -310,10 +306,10 @@ impl Column {
         match *value {
             Value::Null => self.is_nullable,
             Value::Int(number) => {
-                if let Some((min, max)) = self.value_range {
-                    if number < min || number > max {
-                        return false;
-                    }
+                if let Some((min, max)) = self.value_range
+                    && (number < min || number > max)
+                {
+                    return false;
                 }
                 match self.coltype {
                     ColumnType::Int16 => {
@@ -327,15 +323,15 @@ impl Column {
             Value::Str(ref string) => match self.coltype {
                 ColumnType::Int16 | ColumnType::Int32 => false,
                 ColumnType::Str(max_len) => {
-                    if let Some(category) = self.category {
-                        if !category.validate(string) {
-                            return false;
-                        }
-                    }
-                    if !self.enum_values.is_empty()
-                        && !self.enum_values.contains(string)
+                    if let Some(category) = self.category
+                        && !category.validate(string)
                     {
                         return false;
+                    }
+                    if !self.enum_values.is_empty() {
+                        if !self.enum_values.contains(string) {
+                            return false;
+                        }
                     }
                     max_len == 0 || string.chars().count() <= max_len
                 }

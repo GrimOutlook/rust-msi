@@ -4,7 +4,7 @@ extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
-use clap::{App, Arg};
+use clap::{Command, arg};
 use msi::{Delete, Expr, Insert, Select, Update, Value};
 use pest::Parser;
 
@@ -17,15 +17,15 @@ type Pair<'a> = pest::iterators::Pair<'a, Rule>;
 type Pairs<'a> = pest::iterators::Pairs<'a, Rule>;
 
 fn main() {
-    let matches = App::new("msiquery")
+    let matches = Command::new("msiquery")
         .version("0.1")
         .author("Matthew D. Steele <mdsteele@alum.mit.edu>")
         .about("Performs SQL queries on MSI files")
-        .arg(Arg::with_name("path").required(true))
-        .arg(Arg::with_name("query").required(true))
+        .arg(arg!(-p --path <PATH>).required(true))
+        .arg(arg!(-q --query <QUERY>).required(true))
         .get_matches();
-    let path = matches.value_of("path").unwrap();
-    let query = matches.value_of("query").unwrap();
+    let path = matches.get_one::<&String>("path").unwrap();
+    let query = matches.get_one::<&String>("query").unwrap();
     let mut package = msi::open_rw(path).expect("open package");
     for pair in QueryParser::parse(Rule::QueryList, query).expect("parse") {
         process_query(pair, &mut package);

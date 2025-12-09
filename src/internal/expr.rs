@@ -339,9 +339,9 @@ impl Ast {
         parent_prec: i32,
     ) -> Result<(), fmt::Error> {
         match self {
-            Ast::Literal(ref value) => fmt::Display::fmt(value, formatter),
-            Ast::Column(ref name) => formatter.write_str(name.as_str()),
-            Ast::UnOp(op, ref arg) => {
+            Ast::Literal(value) => fmt::Display::fmt(value, formatter),
+            Ast::Column(name) => formatter.write_str(name.as_str()),
+            Ast::UnOp(op, arg) => {
                 match op {
                     UnOp::Neg => formatter.write_str("-")?,
                     UnOp::BitNot => formatter.write_str("~")?,
@@ -349,7 +349,7 @@ impl Ast {
                 }
                 arg.format_with_precedence(formatter, 10)
             }
-            Ast::BinOp(op, ref arg1, ref arg2) => {
+            Ast::BinOp(op, arg1, arg2) => {
                 let op_prec = op.precedence();
                 if op_prec < parent_prec {
                     formatter.write_str("(")?;
@@ -378,7 +378,7 @@ impl Ast {
                 }
                 Ok(())
             }
-            Ast::And(ref arg1, ref arg2) => {
+            Ast::And(arg1, arg2) => {
                 let op_prec = 2;
                 if op_prec < parent_prec {
                     formatter.write_str("(")?;
@@ -391,7 +391,7 @@ impl Ast {
                 }
                 Ok(())
             }
-            Ast::Or(ref arg1, ref arg2) => {
+            Ast::Or(arg1, arg2) => {
                 let op_prec = 1;
                 if op_prec < parent_prec {
                     formatter.write_str("(")?;
@@ -472,49 +472,35 @@ impl BinOp {
             BinOp::Gt => Value::from_bool(arg1 > arg2),
             BinOp::Ge => Value::from_bool(arg1 >= arg2),
             BinOp::Add => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 + num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 + num2),
                 (Value::Str(str1), Value::Str(str2)) => {
                     Value::Str(str1 + &str2)
                 }
                 _ => Value::Null,
             },
             BinOp::Sub => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 - num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 - num2),
                 _ => Value::Null,
             },
             BinOp::Mul => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 * num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 * num2),
                 _ => Value::Null,
             },
             BinOp::Div => match (arg1, arg2) {
                 (_, Value::Int(0)) => Value::Null,
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 / num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 / num2),
                 _ => Value::Null,
             },
             BinOp::BitAnd => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 & num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 & num2),
                 _ => Value::Null,
             },
             BinOp::BitOr => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 | num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 | num2),
                 _ => Value::Null,
             },
             BinOp::BitXor => match (arg1, arg2) {
-                (Value::Int(num1), Value::Int(num2)) => {
-                    Value::Int(num1 ^ num2)
-                }
+                (Value::Int(num1), Value::Int(num2)) => Value::Int(num1 ^ num2),
                 _ => Value::Null,
             },
             BinOp::Shl => match (arg1, arg2) {

@@ -6,6 +6,51 @@ use uuid::Uuid;
 
 // ========================================================================= //
 
+pub trait ToValue {
+    fn to_value(&self) -> Value;
+}
+
+impl<T: ToValue> ToValue for Option<T> {
+    fn to_value(&self) -> Value {
+        match self {
+            Some(value) => value.to_value(),
+            None => Value::Null,
+        }
+    }
+}
+
+impl ToValue for u8 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for u16 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for i16 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self as i32)
+    }
+}
+
+impl ToValue for i32 {
+    fn to_value(&self) -> Value {
+        Value::Int(*self)
+    }
+}
+
+impl ToValue for String {
+    fn to_value(&self) -> Value {
+        Value::Str(self.clone())
+    }
+}
+
+// ========================================================================= //
+
 /// A value from one cell in a database table row.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Value {
@@ -58,11 +103,7 @@ impl Value {
 
     /// Creates a boolean value.
     pub(crate) fn from_bool(boolean: bool) -> Value {
-        if boolean {
-            Value::Int(1)
-        } else {
-            Value::Int(0)
-        }
+        if boolean { Value::Int(1) } else { Value::Int(0) }
     }
 
     /// Coerces the `Value` to a boolean.  Returns false for null, zero, and

@@ -1,8 +1,8 @@
 #[macro_use]
 mod testutil;
 
-use msi::{Package, PackageType};
 use std::io::{Cursor, ErrorKind, Read, Write};
+use msi::{Package, PackageType};
 
 // ========================================================================= //
 

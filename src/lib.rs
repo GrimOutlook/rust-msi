@@ -14,7 +14,7 @@ extern crate cfb;
 extern crate encoding_rs;
 extern crate uuid;
 
-mod internal;
+pub mod internal;
 
 pub use crate::internal::category::Category;
 pub use crate::internal::codepage::CodePage;
@@ -29,7 +29,7 @@ pub use crate::internal::streamname::{
 };
 pub use crate::internal::summary::SummaryInfo;
 pub use crate::internal::table::{Row, Rows, Table};
-pub use crate::internal::value::Value;
+pub use crate::internal::value::{ToValue, Value};
 use std::fs;
 use std::io;
 use std::path::Path;
