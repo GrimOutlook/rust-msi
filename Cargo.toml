@@ -37,8 +37,10 @@ itertools = "0.14.0"
 anyhow = "1.0.100"
 assert2 = "0.3.16"
 clap = { version = "4.5", features = ["derive"] }
+clio = { version = "0.3.5", features = ["clap-parse"] }
 itertools = "0.14.0"
 pest = "2.1"
 pest_derive = "2.1"
 similar = "2.7.0"
 time = "0.3"
+uuid = { version = "1", features = ["v4"] }
