@@ -14,7 +14,7 @@ function fail() {
 }
 
 function fatal() {
-  echo -e "\e[31m   $*\e[0m" >&2
+  fail "$*"
   exit 1
 }
 
