@@ -5,6 +5,7 @@ use crate::internal::table::{Row, Rows, Table};
 use crate::internal::value::{Value, ValueRef};
 use anyhow::bail;
 use cfb;
+use itertools::Itertools;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::{self, Read, Seek, Write};
@@ -160,8 +161,7 @@ impl Insert {
             anyhow::ensure!(
                 values.len() == table.columns().len(),
                 //TODO: Add an actual thiserror type.
-                "Table {:?} has {} columns, but a row with {} values was \
-                     provided",
+                "Table {:?} has {} columns, but a row with {} values was provided",
                 self.table_name,
                 table.columns().len(),
                 values.len()
@@ -221,6 +221,21 @@ impl Insert {
             );
             new_keys_set.insert(keys);
         }
+        // Check if the new set of rows is different than what already exists.
+        // If it's the same then theres no need to waste time writing it out
+        // again.
+        if new_keys_set
+            .symmetric_difference(
+                &rows_map.keys().cloned().collect::<HashSet<Vec<Value>>>(),
+            )
+            .collect_vec()
+            .is_empty()
+        {
+            eprintln!("Not writing stream. Rows are the same.");
+            eprintln!("Rows: {:?}", new_keys_set);
+            return Ok(());
+        }
+
         // Insert the new rows into the table.
         for values in self.new_rows {
             let keys: Vec<Value> = key_indices
@@ -235,6 +250,11 @@ impl Insert {
         }
         // Write the table back out to the file.
         let rows: Vec<Vec<ValueRef>> = rows_map.into_values().collect();
+        eprintln!(
+            "Writing to stream {} for table {}",
+            streamname::decode(&stream_name).0,
+            self.table_name
+        );
         let stream = comp.create_stream(&stream_name)?;
         table.write_rows(stream, rows)?;
         Ok(())

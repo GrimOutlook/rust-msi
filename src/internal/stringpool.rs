@@ -76,6 +76,12 @@ impl StringRef {
 
 // ========================================================================= //
 
+// ## internal
+//
+// The "StringPool" is stored in 2 separate streams. The `_StringData` stream
+// holds the actual codepage-encoded string data such as you would see printed
+// to the screen while the `_StringPool` stream holds the the length of the
+// string and the number of times the string is referenced by the MSI.
 pub struct StringPoolBuilder {
     codepage: CodePage,
     long_string_refs: bool,
@@ -83,11 +89,20 @@ pub struct StringPoolBuilder {
 }
 
 impl StringPoolBuilder {
+    /// Read the contents of the `_StringPool` stream into a `StringPoolBuilder`.
+    /// `build_from_data` must be called in order to construct a full
+    /// `StringPool`.
+    ///
+    /// ## Args
+    /// - `reader` Contents of the `_StringPool` stream.
     pub fn read_from_pool<R: Read>(
         mut reader: R,
     ) -> io::Result<StringPoolBuilder> {
+        // First 2 bytes is the codepage.
         let codepage_id = reader.read_u32::<LittleEndian>()?;
+        // Check to see if this string pool is encoded using 2 or 3 bytes.
         let long_string_refs = (codepage_id & LONG_STRING_REFS_BIT) != 0;
+        // Fix the codepage ID so we can match it against our code pages.
         let codepage_id = (codepage_id & !LONG_STRING_REFS_BIT) as i32;
         let codepage = match CodePage::from_id(codepage_id) {
             Some(codepage) => codepage,
@@ -100,7 +115,14 @@ impl StringPoolBuilder {
         while let Ok(length) = reader.read_u16::<LittleEndian>() {
             let mut length = length as u32;
             let refcount = reader.read_u16::<LittleEndian>()?;
+            // TODO: Figure out WTF this is doing.
+            // Again, why is this reading the first 2 bytes and then later
+            // possibly reading another 4 bytes for the length of the string.
+            // This seems like it might be related to `long_string_refs` but
+            // wouldn't we want to reference that instead of guessing based on
+            // the first length reading?
             if length == 0 && refcount > 0 {
+                panic!("I'm so confused.");
                 length = reader.read_u32::<LittleEndian>()?;
             }
             lengths_and_refcounts.push((length, refcount));
@@ -112,12 +134,17 @@ impl StringPoolBuilder {
         })
     }
 
+    /// Build a `StringPool` from a reader containing the contents of the
+    /// `_StringData` stream.
     pub fn build_from_data<R: Read>(
         self,
         mut reader: R,
     ) -> io::Result<StringPool> {
         let mut strings = Vec::<(String, u16)>::new();
         for (length, refcount) in self.lengths_and_refcounts {
+            // TODO: Determine why there is a 0 in front of every length. Maybe
+            // because when using long_string_refs that byte is usable but it's
+            // not handled currently?
             let mut buffer = vec![0u8; length as usize];
             reader.read_exact(&mut buffer)?;
             strings.push((self.codepage.decode(&buffer), refcount));
@@ -198,11 +225,7 @@ impl StringPool {
     #[allow(dead_code)]
     pub fn refcount(&self, string_ref: StringRef) -> u16 {
         let index = string_ref.index();
-        if index < self.strings.len() {
-            self.strings[index].1
-        } else {
-            0
-        }
+        if index < self.strings.len() { self.strings[index].1 } else { 0 }
     }
 
     /// Inserts a string into the pool, or increments its refcount if it's
@@ -218,6 +241,7 @@ impl StringPool {
                 debug_assert_eq!(st, "");
                 *st = string;
                 *refcount = 1;
+                // TODO: Why are we returning index+1? I'm so confused.
                 return StringRef((index + 1) as i32);
             }
             if *st == string && *refcount < u16::MAX {
@@ -271,9 +295,18 @@ impl StringPool {
         for &(ref string, refcount) in &self.strings {
             let length = self.codepage.encode(string).len() as u32;
             let short_length = u16::try_from(length).unwrap_or_default();
+            // TODO: This is super weird. Why do we write the short length and
+            // then if it's zero write the full length as well?
+            if short_length == 0 && refcount == 0 {
+                eprintln!("Ignoring null stringref");
+                continue;
+            }
             writer.write_u16::<LittleEndian>(short_length)?;
             writer.write_u16::<LittleEndian>(refcount)?;
             if short_length == 0 && refcount > 0 {
+                panic!(
+                    "Idk why this is like this but apparently it doesn't effect the duplicate MSI"
+                );
                 writer.write_u32::<LittleEndian>(length)?;
             }
         }

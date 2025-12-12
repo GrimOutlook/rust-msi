@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
 # Color information found here https://misc.flogisoft.com/bash/tip_colors_and_formatting
+function info() {
+  echo -e "\e[36m   $*\e[0m" >&2
+}
+
 function success() {
   echo -e "\e[32m   $*\e[0m" >&2
 }
@@ -76,7 +80,7 @@ function dump_msi() {
   MSI=$1
   DUMP_DIR=$(mktemp -d)
   msidump -t -d "$DUMP_DIR" "$MSI" >/dev/null || fatal "Failed to dump $MSI table data to $DUMP_DIR"
-  success "Dumped $MSI tables to $DUMP_DIR"
+  info "Dumped $MSI tables to $DUMP_DIR"
   echo "$DUMP_DIR"
 }
 WIXL_DUMP_DIR=$(dump_msi $WIXL_MSI)

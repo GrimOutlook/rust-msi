@@ -878,6 +878,7 @@ impl<F: Read + Write + Seek> Finish<F> for FinishImpl {
             package.is_summary_info_modified = false;
         }
         if package.string_pool.is_modified() {
+            eprintln!("Writing StringPool data");
             {
                 let name = streamname::encode(STRING_POOL_TABLE_NAME, true);
                 let stream =
