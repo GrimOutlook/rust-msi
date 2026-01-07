@@ -22,37 +22,23 @@ function fatal() {
   exit 1
 }
 
-WIXL_MSI="WIXL_MSI.msi"
-DUPLICATE_MSI="DUPLICATE_MSI.msi"
-
-# Remove the old files
-rm $WIXL_MSI $DUPLICATE_MSI
-
-# Build the binary separately so the MSIs are built as close together as
-# possible temporally.
-cargo build --example duplicate || fatal "Failed to build \`duplicate\` example"
-
-wixl Test.wxs -o $WIXL_MSI || fatal "Failed to build \`Test.msi\` using \`msitools\`"
-
-REVISION_NUMBER="$(msiinfo suminfo $WIXL_MSI | grep -oP "Revision number \(UUID\): \K.*")"
-
-# Generate the duplicate MSI.
-./target/debug/examples/duplicate --revision-number "$REVISION_NUMBER" $DUPLICATE_MSI
+WIXL_MSI="$1"
+DUPLICATE_MSI="$2"
 
 # Check for differences in the Summary Header
-WIXL_SUMINFO=$(msiinfo suminfo $WIXL_MSI)
-DUPLICATE_SUMINFO=$(msiinfo suminfo $DUPLICATE_MSI)
+WIXL_SUMINFO=$(msiinfo suminfo "$WIXL_MSI")
+DUPLICATE_SUMINFO=$(msiinfo suminfo "$DUPLICATE_MSI")
 
 if test "$WIXL_SUMINFO" == "$DUPLICATE_SUMINFO"; then
   success "SummaryInformation is the same"
 else
   fail "SummaryInformation contains differences"
-  difft <($WIXL_SUMINFO) <($DUPLICATE_SUMINFO)
+  difft <(echo "$WIXL_SUMINFO") <(echo "$DUPLICATE_SUMINFO")
 fi
 
 # Check that the list of tables is the same
-WIXL_TABLES=$(msiinfo tables $WIXL_MSI | sort)
-DUPLICATE_TABLES=$(msiinfo tables $DUPLICATE_MSI | sort)
+WIXL_TABLES=$(msiinfo tables "$WIXL_MSI" | sort)
+DUPLICATE_TABLES=$(msiinfo tables "$DUPLICATE_MSI" | sort)
 warn "Cannot create tables in a different order using current \`rust-msi\` implementation."
 warn "Only a table's existence in list is currently tested."
 
@@ -65,8 +51,8 @@ else
 fi
 
 # Check that the list of streams is the same
-WIXL_STREAMS=$(msiinfo streams $WIXL_MSI | sort)
-DUPLICATE_STREAMS=$(msiinfo streams $DUPLICATE_MSI | sort)
+WIXL_STREAMS=$(msiinfo streams "$WIXL_MSI" | sort)
+DUPLICATE_STREAMS=$(msiinfo streams "$DUPLICATE_MSI" | sort)
 
 if test "$WIXL_STREAMS" == "$DUPLICATE_STREAMS"; then
   success "Streams list is the same"
@@ -83,8 +69,8 @@ function dump_msi() {
   info "Dumped $MSI tables to $DUMP_DIR"
   echo "$DUMP_DIR"
 }
-WIXL_DUMP_DIR=$(dump_msi $WIXL_MSI)
-DUPLICATE_DUMP_DIR=$(dump_msi $DUPLICATE_MSI)
+WIXL_DUMP_DIR=$(dump_msi "$WIXL_MSI")
+DUPLICATE_DUMP_DIR=$(dump_msi "$DUPLICATE_MSI")
 shopt -s nullglob
 for table_file in "$WIXL_DUMP_DIR"/*; do
   table=$(basename "$table_file")

@@ -122,7 +122,6 @@ impl StringPoolBuilder {
             // wouldn't we want to reference that instead of guessing based on
             // the first length reading?
             if length == 0 && refcount > 0 {
-                panic!("I'm so confused.");
                 length = reader.read_u32::<LittleEndian>()?;
             }
             lengths_and_refcounts.push((length, refcount));
@@ -142,9 +141,6 @@ impl StringPoolBuilder {
     ) -> io::Result<StringPool> {
         let mut strings = Vec::<(String, u16)>::new();
         for (length, refcount) in self.lengths_and_refcounts {
-            // TODO: Determine why there is a 0 in front of every length. Maybe
-            // because when using long_string_refs that byte is usable but it's
-            // not handled currently?
             let mut buffer = vec![0u8; length as usize];
             reader.read_exact(&mut buffer)?;
             strings.push((self.codepage.decode(&buffer), refcount));
@@ -295,18 +291,9 @@ impl StringPool {
         for &(ref string, refcount) in &self.strings {
             let length = self.codepage.encode(string).len() as u32;
             let short_length = u16::try_from(length).unwrap_or_default();
-            // TODO: This is super weird. Why do we write the short length and
-            // then if it's zero write the full length as well?
-            if short_length == 0 && refcount == 0 {
-                eprintln!("Ignoring null stringref");
-                continue;
-            }
             writer.write_u16::<LittleEndian>(short_length)?;
             writer.write_u16::<LittleEndian>(refcount)?;
             if short_length == 0 && refcount > 0 {
-                panic!(
-                    "Idk why this is like this but apparently it doesn't effect the duplicate MSI"
-                );
                 writer.write_u32::<LittleEndian>(length)?;
             }
         }

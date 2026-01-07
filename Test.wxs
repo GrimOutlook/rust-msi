@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product UpgradeCode="*" Name="MyProduct" Id="*" Language="1033" Version="0.0.0"
+    <Product UpgradeCode="*" Name="MyProduct" Id="{11111111-1111-1111-1111-111111111113}"
+        Language="1033" Version="0.0.0"
         Manufacturer="MyManufacturer">
-        <Package Id="{11111111-1111-1111-1111-111111111113}" Keywords="Installer; 0.0.0"
+        <Package Keywords="Installer; 0.0.0"
             Description="MyDescription"
             Comments="MyComments" Manufacturer="MyManufacturer"
             InstallerVersion="200"

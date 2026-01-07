@@ -2,7 +2,7 @@ use std::{fs::File, io::Write, str::FromStr};
 
 use clap::{Parser, command};
 use clio::ClioPath;
-use msi::Value;
+use msi::{Delete, Value};
 use uuid::Uuid;
 
 /// Simple minimum reproducible example showing that a base MSI becomes invalid
@@ -44,13 +44,10 @@ fn main() {
 
     // Summary Information
     let sum = package.summary_info_mut();
-    sum.set_uuid(
-        *uuid::fmt::Braced::from_str("{11111111-1111-1111-1111-111111111111}")
-            .unwrap()
-            .as_uuid(),
-    ); // PID 9
+    sum.set_uuid(args.revision_number); // PID 9
     package.flush().unwrap();
 
+    package.delete_rows(Delete::from("Property")).unwrap();
     // Required Property Information
     package
         .insert_rows(msi::Insert::into("Property").rows(vec![
@@ -62,6 +59,7 @@ fn main() {
             vec![Value::from("ProductVersion"), Value::from("0.0.0")],
             vec![Value::from("ProductLanguage"), Value::from("1033")],
             vec![Value::from("Manufacturer"), Value::from("MyManufacturer")],
+            vec![Value::from("UpgradeCode"), Value::from("{*}")],
         ]))
         .unwrap();
 

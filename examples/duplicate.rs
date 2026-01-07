@@ -462,7 +462,7 @@ fn main() {
                 Value::from(1600),
             ],
             vec![
-                Value::from("UnpublishedFeatures"),
+                Value::from("UnpublishFeatures"),
                 Value::Null,
                 Value::from(1800),
             ],
