@@ -1,3 +1,14 @@
+[package]
+name = "msi"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Read/write Windows Installer (MSI) files"
+readme.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+
 [workspace]
 members = [".", "ffi"]
 default-members = [".", "ffi"]
@@ -5,31 +16,21 @@ default-members = [".", "ffi"]
 [workspace.package]
 version = "0.9.0"
 authors = ["Matthew D. Steele <mdsteele@alum.mit.edu>"]
-repository = "https://github.com/mdsteele/rust-msi"
-keywords = ["msi", "windows", "installer", "package"]
-license = "MIT"
-readme = "README.md"
 edition = "2021"
-
-[package]
-name = "msi"
-version.workspace = true
-authors.workspace = true
-description = "Read/write Windows Installer (MSI) files"
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
-readme.workspace = true
-edition.workspace = true
+readme = "README.md"
+repository = "https://github.com/mdsteele/rust-msi"
+license = "MIT"
+keywords = ["installer", "msi", "package", "windows"]
 
 [dependencies]
 byteorder = "1"
-cfb = "0.11"
+cfb = "0.12"
 encoding_rs = "0.8"
 uuid = "1"
 
 [dev-dependencies]
-clap = "2.27"
-pest = "2.1"
-pest_derive = "2.1"
+clap = { version = "4.5", features = ["derive"] }
+clio = { version = "0.3.5", features = ["clap-parse"] }
+pest = "2.8"
+pest_derive = "2.8"
 time = "0.3"
