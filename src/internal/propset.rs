@@ -375,10 +375,8 @@ impl PropertySet {
             if let PropertyValue::I2(codepage_id) = property_value {
                 if let Some(codepage) = CodePage::from_id(codepage_id as i32) {
                     self.codepage = codepage;
-                    return;
                 }
             }
-            eprintln!("Failed to set codepage to {property_value:?}");
         }
         self.properties.insert(property_name, property_value);
     }

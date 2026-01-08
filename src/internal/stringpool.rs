@@ -11,7 +11,7 @@ const MAX_STRING_REF: i32 = 0xff_ffff;
 // ========================================================================= //
 
 /// A reference to a string in the string pool.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct StringRef(i32);
 
 impl StringRef {
@@ -214,15 +214,16 @@ impl StringPool {
         for (index, &mut (ref mut st, ref mut refcount)) in
             self.strings.iter_mut().enumerate()
         {
+            let pool_index = index as i32 + 1;
             if *refcount == 0 {
                 debug_assert_eq!(st, "");
                 *st = string;
                 *refcount = 1;
-                return StringRef((index + 1) as i32);
+                return StringRef(pool_index);
             }
             if *st == string && *refcount < u16::MAX {
                 *refcount += 1;
-                return StringRef((index + 1) as i32);
+                return StringRef(pool_index);
             }
         }
         if self.strings.len() >= u16::MAX as usize && !self.long_string_refs {

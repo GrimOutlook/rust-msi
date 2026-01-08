@@ -1,8 +1,9 @@
 use crate::internal::category::Category;
-use crate::internal::column::Column;
+use crate::internal::column::{Column, TableValue};
 use crate::internal::streamname;
 use crate::internal::stringpool::StringPool;
 use crate::internal::value::{Value, ValueRef};
+use crate::ColumnType;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Index;
 use std::rc::Rc;
@@ -140,9 +141,19 @@ impl Table {
         mut writer: W,
         rows: Vec<Vec<ValueRef>>,
     ) -> io::Result<()> {
+        let mut table_rows = rows
+            .iter()
+            .map(|row| TableRow::from_value_refs(row, self.columns.clone()))
+            .collect::<io::Result<Vec<TableRow>>>()?;
+
+        // Make sure the rows are sorted correctly, or else the MSI will fail to
+        // install.
+        table_rows.sort();
+
         for (index, column) in self.columns.iter().enumerate() {
             let coltype = column.coltype();
-            for row in &rows {
+            for table_row in table_rows.iter() {
+                let row = table_row.row_data();
                 coltype.write_value(
                     &mut writer,
                     row[index],
@@ -151,6 +162,62 @@ impl Table {
             }
         }
         Ok(())
+    }
+}
+
+// A row containing the exact data that will be written to the table stream when
+// written to file
+#[derive(PartialEq, Eq)]
+pub struct TableRow {
+    row: Vec<TableValue>,
+    columns: Vec<Column>,
+}
+
+impl TableRow {
+    pub fn row_data(&self) -> &Vec<TableValue> {
+        &self.row
+    }
+
+    pub fn from_value_refs(
+        val_refs: &[ValueRef],
+        columns: Vec<Column>,
+    ) -> io::Result<TableRow> {
+        let table_row = columns
+            .iter()
+            .enumerate()
+            .map(|(col_idx, column)| {
+                column.coltype().table_value(val_refs[col_idx])
+            })
+            .collect::<io::Result<Vec<TableValue>>>()?;
+        Ok(TableRow { row: table_row, columns })
+    }
+}
+
+impl PartialOrd for TableRow {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TableRow {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for (idx, column) in self.columns.iter().enumerate() {
+            if let Some(category) = column.category() {
+                if category == Category::Binary {
+                    continue;
+                }
+            }
+
+            if self.row[idx] > other.row[idx] {
+                return std::cmp::Ordering::Greater;
+            } else if self.row[idx] == other.row[idx] {
+                // Sort by the next column in the row if the values are considered equal
+                continue;
+            } else {
+                return std::cmp::Ordering::Less;
+            }
+        }
+        std::cmp::Ordering::Equal
     }
 }
 

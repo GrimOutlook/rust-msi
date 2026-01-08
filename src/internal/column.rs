@@ -16,11 +16,19 @@ const COL_NULLABLE_BIT: i32 = 0x1000;
 const COL_PRIMARY_KEY_BIT: i32 = 0x2000;
 // I haven't yet been able to find any clear documentation on what these two
 // bits in the column type bitfield do, so both the constant names and the way
-// this library handles them are laregly speculative right now:
+// this library handles them are largely speculative right now:
 const COL_VALID_BIT: i32 = 0x100;
 const COL_NONBINARY_BIT: i32 = 0x400;
 
 // ========================================================================= //
+
+// Values in the exact form they will be written to the table stream
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
+pub(crate) enum TableValue {
+    Int16(i16),
+    Int32(i32),
+    Str(Option<StringRef>),
+}
 
 /// A database column data type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -87,18 +95,15 @@ impl ColumnType {
         }
     }
 
-    pub(crate) fn write_value<W: Write>(
+    pub(crate) fn table_value(
         &self,
-        writer: &mut W,
         value_ref: ValueRef,
-        long_string_refs: bool,
-    ) -> io::Result<()> {
-        match *self {
+    ) -> io::Result<TableValue> {
+        Ok(match *self {
             ColumnType::Int16 => match value_ref {
-                ValueRef::Null => writer.write_i16::<LittleEndian>(0)?,
+                ValueRef::Null => TableValue::Int16(0),
                 ValueRef::Int(number) => {
-                    let number = (number as i16) ^ -0x8000;
-                    writer.write_i16::<LittleEndian>(number)?
+                    TableValue::Int16((number as i16) ^ -0x8000)
                 }
                 ValueRef::Str(_) => invalid_input!(
                     "Cannot write {:?} to {} column",
@@ -107,10 +112,9 @@ impl ColumnType {
                 ),
             },
             ColumnType::Int32 => match value_ref {
-                ValueRef::Null => writer.write_i32::<LittleEndian>(0)?,
+                ValueRef::Null => TableValue::Int32(0),
                 ValueRef::Int(number) => {
-                    let number = number ^ -0x8000_0000;
-                    writer.write_i32::<LittleEndian>(number)?
+                    TableValue::Int32(number ^ -0x8000_0000)
                 }
                 ValueRef::Str(_) => invalid_input!(
                     "Cannot write {:?} to {} column",
@@ -118,17 +122,29 @@ impl ColumnType {
                     self
                 ),
             },
-            ColumnType::Str(_) => {
-                let string_ref = match value_ref {
-                    ValueRef::Null => None,
-                    ValueRef::Int(_) => invalid_input!(
-                        "Cannot write {:?} to {} column",
-                        value_ref,
-                        self
-                    ),
-                    ValueRef::Str(string_ref) => Some(string_ref),
-                };
-                StringRef::write(writer, string_ref, long_string_refs)?;
+            ColumnType::Str(_) => match value_ref {
+                ValueRef::Null => TableValue::Str(None),
+                ValueRef::Int(_) => invalid_input!(
+                    "Cannot write {:?} to {} column",
+                    value_ref,
+                    self
+                ),
+                ValueRef::Str(string_ref) => TableValue::Str(Some(string_ref)),
+            },
+        })
+    }
+
+    pub(crate) fn write_value<W: Write>(
+        &self,
+        writer: &mut W,
+        table_value: TableValue,
+        long_string_refs: bool,
+    ) -> io::Result<()> {
+        match table_value {
+            TableValue::Int16(val) => writer.write_i16::<LittleEndian>(val)?,
+            TableValue::Int32(val) => writer.write_i32::<LittleEndian>(val)?,
+            TableValue::Str(val) => {
+                StringRef::write(writer, val, long_string_refs)?;
             }
         }
         Ok(())
@@ -167,7 +183,7 @@ impl fmt::Display for ColumnType {
 // ========================================================================= //
 
 /// A database column.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Column {
     name: String,
     coltype: ColumnType,
