@@ -4,6 +4,7 @@ use crate::internal::propset::{OperatingSystem, PropertySet, PropertyValue};
 use crate::internal::timestamp::Timestamp;
 use std::io::{self, Read, Seek, Write};
 use std::time::SystemTime;
+use time::UtcDateTime;
 use uuid::Uuid;
 
 // ========================================================================= //
@@ -19,21 +20,110 @@ use uuid::Uuid;
 const FMTID: [u8; 16] =
     *b"\xe0\x85\x9f\xf2\xf9\x4f\x68\x10\xab\x91\x08\x00\x2b\x27\xb3\xd9";
 
-const PROPERTY_TITLE: u32 = 2;
-const PROPERTY_SUBJECT: u32 = 3;
-const PROPERTY_AUTHOR: u32 = 4;
-const PROPERTY_COMMENTS: u32 = 6;
-const PROPERTY_TEMPLATE: u32 = 7;
-const PROPERTY_UUID: u32 = 9;
-const PROPERTY_CREATION_TIME: u32 = 12;
-const PROPERTY_WORD_COUNT: u32 = 15;
-const PROPERTY_CREATING_APP: u32 = 18;
+#[repr(u32)]
+pub enum SummaryInfoField {
+    Codepage = 1,
+    Title,
+    Subject,
+    Author,
+    Keywords,
+    Comments,
+    Template,
+    LastSavedBy,
+    RevisionNumber,
+    LastPrinted,
+    CreateDateTime,
+    LastSaveDateTime,
+    PageCount,
+    WordCount,
+    CharacterCount,
+    CreatingApplication,
+    Security,
+}
+
+pub enum Architecture {
+    X64,
+    Intel,
+    Intel64,
+    Arm,
+    Arm64,
+}
+
+/// [Documentation](https://learn.microsoft.com/en-us/windows/win32/msi/template-summary)
+pub enum Template {
+    /// For an installation package, the Template Summary property indicates the
+    /// platform and language versions that are compatible with this
+    /// installation database.
+    Installation { arch: Option<Architecture>, languages: Vec<Language> },
+    /// The Template Summary property of a transform indicates the platform and
+    /// language versions compatible with the transform. In a transform file,
+    /// only one language may be specified.
+    Transform { arch: Option<Architecture>, language: Option<Language> },
+    /// The Template Summary property of a patch package is a
+    /// semicolon-delimited list of the product codes that can accept the patch.
+    Patch { product_codes: Vec<Uuid> },
+}
+
+pub enum WindowsInstallerVersion {
+    V2_0 = 200,
+    V3_0 = 300,
+    V3_1 = 301,
+    V4_5 = 405,
+    V5_0 = 500,
+}
+
+pub enum FilenameLength {
+    /// MSI uses long filenames
+    LongFilenames,
+    /// MSI uses short filenames
+    ShortFilenames,
+}
+
+pub enum SourceCompression {
+    /// Source is uncompressed.
+    Uncompressed,
+    /// Source is compressed.
+    Compressed,
+}
+
+pub enum SourceMedia {
+    /// Source is original media.
+    Original,
+    /// Source is an administrative image created by an administrative
+    /// installation.
+    AdminImage,
+}
+
+pub enum ElevatedPrivileges {
+    Required,
+    NotRequired,
+}
+
+pub struct WordCount {
+    filename_length: FilenameLength,
+    compressions: SourceCompression,
+    source: SourceMedia,
+    elevated_privileges: ElevatedPrivileges,
+}
 
 // ========================================================================= //
 
 /// Summary information (e.g. title, author) about an MSI package.
 pub struct SummaryInfo {
-    properties: PropertySet,
+    codepage: CodePage,
+    title: String,
+    subject: String,
+    author: String,
+    keywords: Vec<String>,
+    comments: String,
+    template: Template,
+    last_saved_by: String,
+    revision_number: Uuid,
+    last_printed: UtcDateTime,
+    created_datetime: UtcDateTime,
+    last_saved_datetime: UtcDateTime,
+    page_count: WindowsInstallerVersion,
+    word_count: WordCount,
 }
 
 impl SummaryInfo {
@@ -54,289 +144,13 @@ impl SummaryInfo {
     }
 
     pub(crate) fn write<W: Write>(&self, writer: W) -> io::Result<()> {
-        self.properties.write(writer)
+        Into::<PropertySet>::into(self).write(writer)
     }
+}
 
-    /// Gets the architecture string from the "template" property, if one is
-    /// set.  This indicates the hardware architecture that this package is
-    /// intended for (e.g. `"x64"`).
-    #[must_use]
-    pub fn arch(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_TEMPLATE) {
-            Some(PropertyValue::LpStr(template)) => {
-                let arch =
-                    template.split_once(';').map_or(&**template, |x| x.0);
-                if arch.is_empty() {
-                    None
-                } else {
-                    Some(arch)
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// Sets the architecture string in the "template" property.
-    pub fn set_arch<S: Into<String>>(&mut self, arch: S) {
-        let langs = match self.properties.get(PROPERTY_TEMPLATE) {
-            Some(PropertyValue::LpStr(template)) => {
-                let parts: Vec<&str> = template.splitn(2, ';').collect();
-                if parts.len() > 1 {
-                    parts[1].to_string()
-                } else {
-                    String::new()
-                }
-            }
-            _ => String::new(),
-        };
-        let template = format!("{};{}", arch.into(), langs);
-        self.properties.set(PROPERTY_TEMPLATE, PropertyValue::LpStr(template));
-    }
-
-    /// Clears the architecture string in the "template" property.
-    pub fn clear_arch(&mut self) {
-        self.set_arch("");
-    }
-
-    /// Gets the "author" property, if one is set.  This indicates the name of
-    /// the person or company that created the package.
-    #[must_use]
-    pub fn author(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_AUTHOR) {
-            Some(PropertyValue::LpStr(author)) => Some(author.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Sets the "author" property.
-    pub fn set_author<S: Into<String>>(&mut self, author: S) {
-        self.properties
-            .set(PROPERTY_AUTHOR, PropertyValue::LpStr(author.into()));
-    }
-
-    /// Clears the "author" property.
-    pub fn clear_author(&mut self) {
-        self.properties.remove(PROPERTY_AUTHOR);
-    }
-
-    /// Gets the code page used for serializing this summary info.
-    #[must_use]
-    pub fn codepage(&self) -> CodePage {
-        self.properties.codepage()
-    }
-
-    /// Sets the code page used for serializing this summary info.
-    pub fn set_codepage(&mut self, codepage: CodePage) {
-        self.properties.set_codepage(codepage);
-    }
-
-    /// Gets the "comments" property, if one is set.  This typically gives a
-    /// brief description of the application/software that will be installed by
-    /// the package.
-    #[must_use]
-    pub fn comments(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_COMMENTS) {
-            Some(PropertyValue::LpStr(comments)) => Some(comments.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Sets the "comments" property.
-    pub fn set_comments<S: Into<String>>(&mut self, comments: S) {
-        self.properties
-            .set(PROPERTY_COMMENTS, PropertyValue::LpStr(comments.into()));
-    }
-
-    /// Clears the "comments" property.
-    pub fn clear_comments(&mut self) {
-        self.properties.remove(PROPERTY_COMMENTS);
-    }
-
-    /// Gets the "creating application" property, if one is set.  This
-    /// indicates the name of the software application/tool that was used to
-    /// create the package.
-    #[must_use]
-    pub fn creating_application(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_CREATING_APP) {
-            Some(PropertyValue::LpStr(app_name)) => Some(app_name.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Sets the "creating application" property.
-    pub fn set_creating_application<S: Into<String>>(&mut self, app_name: S) {
-        self.properties
-            .set(PROPERTY_CREATING_APP, PropertyValue::LpStr(app_name.into()));
-    }
-
-    /// Clears the "creating application" property.
-    pub fn clear_creating_application(&mut self) {
-        self.properties.remove(PROPERTY_CREATING_APP);
-    }
-
-    /// Gets the "creation time" property, if one is set.  This indicates the
-    /// date/time when the package was created.
-    #[must_use]
-    pub fn creation_time(&self) -> Option<SystemTime> {
-        match self.properties.get(PROPERTY_CREATION_TIME) {
-            Some(&PropertyValue::FileTime(timestamp)) => {
-                Some(timestamp.to_system_time())
-            }
-            _ => None,
-        }
-    }
-
-    /// Sets the "creation time" property.
-    pub fn set_creation_time(&mut self, timestamp: SystemTime) {
-        self.properties.set(
-            PROPERTY_CREATION_TIME,
-            PropertyValue::FileTime(Timestamp::from_system_time(timestamp)),
-        );
-    }
-
-    /// Sets the "creation time" property to the current time.
-    pub fn set_creation_time_to_now(&mut self) {
-        self.set_creation_time(SystemTime::now());
-    }
-
-    /// Clears the "creation time" property.
-    pub fn clear_creation_time(&mut self) {
-        self.properties.remove(PROPERTY_CREATION_TIME);
-    }
-
-    /// Gets the list of languages from the "template" property, if one is set.
-    /// This indicates the languages that this package supports.
-    pub fn languages(&self) -> Vec<Language> {
-        match self.properties.get(PROPERTY_TEMPLATE) {
-            Some(PropertyValue::LpStr(template)) => {
-                let parts: Vec<&str> = template.splitn(2, ';').collect();
-                if parts.len() > 1 {
-                    parts[1]
-                        .split(',')
-                        .filter_map(|code| code.parse().ok())
-                        .map(Language::from_code)
-                        .collect()
-                } else {
-                    Vec::new()
-                }
-            }
-            _ => Vec::new(),
-        }
-    }
-
-    /// Sets the list of languages in the "template" property.
-    pub fn set_languages(&mut self, languages: &[Language]) {
-        let mut template = match self.properties.get(PROPERTY_TEMPLATE) {
-            Some(PropertyValue::LpStr(template)) => template
-                .split_once(';')
-                .map_or(&**template, |x| x.0)
-                .to_string(),
-            _ => String::new(),
-        };
-        template.push(';');
-        let mut first = true;
-        for language in languages {
-            if first {
-                first = false;
-            } else {
-                template.push(',');
-            }
-            template.push_str(&format!("{}", language.code()));
-        }
-        self.properties.set(PROPERTY_TEMPLATE, PropertyValue::LpStr(template));
-    }
-
-    /// Clears the list of languages in the "template" property.
-    pub fn clear_languages(&mut self) {
-        self.set_languages(&[]);
-    }
-
-    /// Gets the "subject" property, if one is set.  This typically indicates
-    /// the name of the application/software that will be installed by the
-    /// package.
-    #[must_use]
-    pub fn subject(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_SUBJECT) {
-            Some(PropertyValue::LpStr(subject)) => Some(subject.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Sets the "subject" property.
-    pub fn set_subject<S: Into<String>>(&mut self, subject: S) {
-        self.properties
-            .set(PROPERTY_SUBJECT, PropertyValue::LpStr(subject.into()));
-    }
-
-    /// Clears the "subject" property.
-    pub fn clear_subject(&mut self) {
-        self.properties.remove(PROPERTY_SUBJECT);
-    }
-
-    /// Gets the "title" property, if one is set.  This indicates the type of
-    /// the installer package (e.g. "Installation Database" or "Patch").
-    #[must_use]
-    pub fn title(&self) -> Option<&str> {
-        match self.properties.get(PROPERTY_TITLE) {
-            Some(PropertyValue::LpStr(title)) => Some(title.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Sets the "title" property.
-    pub fn set_title<S: Into<String>>(&mut self, title: S) {
-        self.properties
-            .set(PROPERTY_TITLE, PropertyValue::LpStr(title.into()));
-    }
-
-    /// Clears the "title" property.
-    pub fn clear_title(&mut self) {
-        self.properties.remove(PROPERTY_TITLE);
-    }
-
-    /// Gets the "UUID" property, if one is set.
-    #[must_use]
-    pub fn uuid(&self) -> Option<Uuid> {
-        match self.properties.get(PROPERTY_UUID) {
-            Some(PropertyValue::LpStr(string)) => {
-                let trimmed =
-                    string.trim_start_matches('{').trim_end_matches('}');
-                Uuid::parse_str(trimmed).ok()
-            }
-            _ => None,
-        }
-    }
-
-    /// Sets the "UUID" property.
-    pub fn set_uuid(&mut self, uuid: Uuid) {
-        let mut string = format!("{{{}}}", uuid.hyphenated());
-        string.make_ascii_uppercase();
-        self.properties.set(PROPERTY_UUID, PropertyValue::LpStr(string));
-    }
-
-    /// Clears the "UUID" property.
-    pub fn clear_uuid(&mut self) {
-        self.properties.remove(PROPERTY_UUID);
-    }
-
-    /// Gets the "Word Count" property, if one is set.
-    #[must_use]
-    pub fn word_count(&self) -> Option<i32> {
-        match self.properties.get(PROPERTY_WORD_COUNT) {
-            Some(PropertyValue::I4(word_count)) => Some(*word_count),
-            _ => None,
-        }
-    }
-
-    /// Sets the "Word Count" property.
-    pub fn set_word_count(&mut self, word_count: i32) {
-        self.properties
-            .set(PROPERTY_WORD_COUNT, PropertyValue::I4(word_count));
-    }
-
-    /// Clears the "Word Count" property.
-    pub fn clear_word_count(&mut self) {
-        self.properties.remove(PROPERTY_WORD_COUNT);
+impl Into<PropertySet> for SummaryInfo {
+    fn into(self) -> PropertySet {
+        todo!()
     }
 }
 
